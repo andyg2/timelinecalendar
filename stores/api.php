@@ -30,6 +30,10 @@ function api_set_event($p, $r) {
             switch ($key) {
               case 'data':
                 break;
+              case 'start':
+              case 'end':
+                $value = (ceil(intval($value) / 24) * 24);
+                break;
               default:
                 $value = intval($value);
                 break;

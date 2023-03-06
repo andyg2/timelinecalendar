@@ -10,10 +10,9 @@ if (!window.console) {
 var TimelineCalendar = function (element) {
   var elem = element; // jQuery element
 
-  var colwidth = 0,
-    lineHeight = 20,
+  var lineHeight = 20,
     header = null,
-    entered = false, // mouse is over the calendar
+    pixelsPerDay = 0,
     isResizeAction = false, // detected resize action
     isMoveAction = false, // detected move action
     maxHeight = null, // holds max height, looks better - our cal grows
@@ -35,7 +34,7 @@ var TimelineCalendar = function (element) {
     oldStartX = null;
   var factor = 0;
 
-  var zoomLevels = new Array(1, 2, 5, 7, 14, 21, 28, 40, 70, 365);
+  var zoomLevels = new Array(7, 14, 28, 60);
 
   this.getZoomLevelOffset = function (level) {
     var firstTs = options.startDate.getTime() / 1000;
@@ -45,7 +44,6 @@ var TimelineCalendar = function (element) {
 
   this.create = function () {
     var tl = this;
-
     elem.bind('mouseenter', function (event) {
       tl.entered = true;
     });
@@ -64,10 +62,19 @@ var TimelineCalendar = function (element) {
     });
 
     elem.bind('mousewheel', function (event, delta) {
+
+      // var pf = event.screenX < elem.width() / 2 ? -1 : 1;
+      // console.log(event);
+
       if (delta > 0)
-        tl.zoomIn();
+        tl.goPast();
       else
-        tl.zoomOut();
+        tl.goFuture();
+
+      // if (delta > 0)
+      //   tl.zoomIn();
+      // else
+      //   tl.zoomOut();
       return false;
     });
 
@@ -97,7 +104,7 @@ var TimelineCalendar = function (element) {
       d.mouseover(function (event) {
         var pos = $(this).position();
         if (options.itemsResizeable &&
-          event.pageX > (pos.left + $(this).width() - 5)) {
+          event.pageX > (pos.left + $(this).width() - 20)) {
           $("body").addClass("resize");
         }
         else if (options.itemsMoveable)
@@ -111,6 +118,7 @@ var TimelineCalendar = function (element) {
 
       d.mousedown(function (event) {
         mouseDownItem = $(this);
+        // console.log(mouseDownItem);
         dragStartX = event.pageX;
         dragStartY = event.pageY;
         var pos = mouseDownItem.position();
@@ -118,16 +126,18 @@ var TimelineCalendar = function (element) {
         oldStartY = pos.top;
         var mouseMoveFunction = null;
 
-        if (options.itemsResizeable &&
-          event.pageX > (pos.left + mouseDownItem.width() - 5)) {
+        if (options.itemsResizeable && event.pageX > (pos.left + mouseDownItem.width() - 10)) {
           // Handle resize action
           var oldWidth = mouseDownItem.width();
           isResizeAction = true;
           $("body").addClass("resize");
           mouseMoveFunction = function (event) {
-            var newWidth = oldWidth + (event.pageX - dragStartX);
-            if (newWidth < 20)
-              newWidth = 20;
+            var dragDistance = event.pageX - dragStartX;
+            var daysDragged = Math.round(dragDistance / pixelsPerDay);
+            var newWidth = oldWidth + (daysDragged * pixelsPerDay);
+            if (newWidth < pixelsPerDay) {
+              newWidth = pixelsPerDay;
+            }
             mouseDownItem.css("width", newWidth + "px");
           };
         }
@@ -143,14 +153,12 @@ var TimelineCalendar = function (element) {
 
             var newLeft = oldStartX + (event.pageX - dragStartX);
             var newTop = oldStartY + (event.pageY - dragStartY);
-            if (newLeft < 0)
-              newLeft = 0;
 
-            if (mouseDownItem.width() < elem.width() &&
-              (newLeft + mouseDownItem.width() > elem.width()))
-              newLeft = elem.width() - mouseDownItem.width();
+            // Snap to increments of one day horizontally
+            var newLeftInDays = Math.round(newLeft / pixelsPerDay);
+            newLeft = newLeftInDays * pixelsPerDay;
 
-            // Snap to increments of lineHeight (20) pixels vertically
+            // Snap to increments of lineHeight (20) pixels vertically (room number)
             newTop = Math.round(newTop / lineHeight) * lineHeight;
 
             var room = newTop / lineHeight;
@@ -174,7 +182,7 @@ var TimelineCalendar = function (element) {
           var start = zero + pos.left / factor;
           var room = pos.top / lineHeight;
           var end = start + mouseDownItem.width() / factor;
-          console.log(room);
+          // console.log(room);
           event.item = {
             node: mouseDownItem,
             room: parseInt(room),
@@ -203,9 +211,6 @@ var TimelineCalendar = function (element) {
       // d.html(item.room + " " + item.data);
       target.append(d);
     }
-
-    //		console.log( target.height() ); // heigth of datagrid
-    //		target.css("margin-top", "-"+(target.height())+"px" );
 
     // remind maxheight - this looks better after zooming
     if (elem.height() > maxHeight)
@@ -236,11 +241,11 @@ var TimelineCalendar = function (element) {
   }
 
   this.onItemMoved = function (event) {
-    console.log("onItemMovedsss handler " + new Date(event.item.start * 1000) + " " + new Date(event.item.end * 1000));
+    // console.log("onItemMovedsss handler " + new Date(event.item.start * 1000) + " " + new Date(event.item.end * 1000));
   }
 
   this.onItemResized = function (event) {
-    console.log("onItemResized handler" + new Date(event.item.start * 1000) + " " + new Date(event.item.end * 1000));
+    // console.log("onItemResized handler" + new Date(event.item.start * 1000) + " " + new Date(event.item.end * 1000));
   }
 
   this.draw = function () {
@@ -259,24 +264,10 @@ var TimelineCalendar = function (element) {
     dataGrid.attr("class", "datagrid");
     var zoomLevelLimit = this.getZoomLevelOffset(options.zoomLevel);
 
-    var daysInRow = (zoomLevelLimit - (options.startDate.getTime() / 1000)) / 84600;
-
-    if (daysInRow > 350)
-      options.interval = 86400 * 30;
-    else if (daysInRow > 250)
-      options.interval = 86400 * 14;
-    else if (daysInRow > 70)
-      options.interval = 86400 * 7;
-    else if (daysInRow > 30)
-      options.interval = 86400 * 2;
-    else
-      options.interval = 86400;
+    options.interval = 86400;
 
     factor = elem.width() / (zoomLevelLimit - (options.startDate.getTime() / 1000));
-    this.colWidth = factor * options.interval;
-
-    // gridRow = $("<div>").addClass("grid");
-    // gridRow.css("display","none");
+    pixelsPerDay = factor * options.interval;
     var odd = false;
     for (var x = (options.startDate.getTime() / 1000); x < zoomLevelLimit; x += options.interval) {
       odd ^= true;
@@ -285,7 +276,7 @@ var TimelineCalendar = function (element) {
       td.addClass("col");
       td.addClass((odd ? "odd" : "even"));
       td.addClass(currentDate.getDay());
-      td.width(this.colWidth + "px");
+      td.width(pixelsPerDay + "px");
       td.html(currentDate.toLocaleString('default', { month: 'short' }) + " " + currentDate.getDate());
       header.append(td);
     }
@@ -301,7 +292,7 @@ var TimelineCalendar = function (element) {
       this.onDraw(options);
   }
 
-  this.zoomIn = function () {
+  this.zoomIn = function (pf) {
     var currentLevel = options.zoomLevel;
     var levelIn = currentLevel - 1;
     if (zoomLevels[levelIn]) {
@@ -320,13 +311,13 @@ var TimelineCalendar = function (element) {
   }
 
   this.goPast = function () {
-    var tmp = (options.startDate.getTime() / 1000) - ((this.getZoomLevelOffset(options.zoomLevel) - (options.startDate.getTime() / 1000)) / 2);
+    var tmp = (options.startDate.getTime() / 1000) - ((this.getZoomLevelOffset(options.zoomLevel) - (options.startDate.getTime() / 1000)) / 4);
     options.startDate = new Date(tmp * 1000);
     this.draw();
   }
 
   this.goFuture = function () {
-    var tmp = (options.startDate.getTime() / 1000) + (this.getZoomLevelOffset(options.zoomLevel) - (options.startDate.getTime() / 1000)) / 2;
+    var tmp = (options.startDate.getTime() / 1000) + (this.getZoomLevelOffset(options.zoomLevel) - (options.startDate.getTime() / 1000)) / 4;
     options.startDate = new Date(tmp * 1000);
     this.draw();
   }

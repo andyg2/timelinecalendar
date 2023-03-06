@@ -47,6 +47,19 @@ div.timelineCalendar {
   text-overflow: ellipsis;
 }
 
+.timelineCalendar .item::after {
+  top: 0;
+  right: 0px;
+  width: 15px;
+  background-color: #ffffff60;
+  text-align: center;
+  content: '▶';
+  position: absolute;
+  display: inline-block;
+  height: 100%;
+  line-height: 1.3em;
+}
+
 .datagrid {
   margin-top: 20px;
   position: relative;
